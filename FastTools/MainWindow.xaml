@@ -1,0 +1,38 @@
+<Window x:Class="FastTools.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="FastTools" Height="480" Width="900">
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
+            <TextBlock Text="常用命令" FontWeight="Bold" Margin="0,0,0,8" />
+            <ScrollViewer Height="260" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="BtnPanel" />
+            </ScrollViewer>
+        </StackPanel>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="40" />
+            </Grid.RowDefinitions>
+
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <StackPanel x:Name="OutputPanel" />
+                    <Button Click="BtnClear_Click" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Width="30" Height="30" Background="Transparent" BorderBrush="Transparent">
+                        <TextBlock Text="🗑️" FontFamily="Segoe UI Emoji" FontSize="16" Foreground="Gray" />
+                    </Button>
+                </Grid>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,8,0,0">
+                <TextBlock x:Name="AdminNote" FontWeight="Bold" Text="若命令需要管理员权限，请以管理员方式运行本程序。" TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
