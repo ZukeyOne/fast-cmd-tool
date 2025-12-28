@@ -19,4 +19,4 @@ Notes: The app reads and writes `commands.json` (copied to output). To persist a
 - 若命令需要管理员权限，请以管理员权限运行程序或在 CMD 中单独运行命令。
 
 # 功能需求与架构设计
-参考DESIGN.md
+有任何功能更新，都应该更新到DESIGN.md文件

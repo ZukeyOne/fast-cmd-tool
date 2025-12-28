@@ -8,12 +8,28 @@
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Top">
-            <TextBlock Text="常用命令" FontWeight="Bold" Margin="0,0,0,8" />
-            <ScrollViewer Height="260" VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="BtnPanel" />
-            </ScrollViewer>
-        </StackPanel>
+        <Grid Grid.Column="0" Margin="0,0,10,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="1*" />
+                <RowDefinition Height="2*" />
+            </Grid.RowDefinitions>
+
+            <!-- ADB设备显示区域 -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,10" VerticalAlignment="Top">
+                <TextBlock Text="已连接设备" FontWeight="Bold" Margin="0,0,0,8" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Height="Auto">
+                    <StackPanel x:Name="DevicePanel" />
+                </ScrollViewer>
+            </StackPanel>
+
+            <!-- 按钮面板 -->
+            <StackPanel Grid.Row="1" Margin="0,0,0,0" VerticalAlignment="Top">
+                <TextBlock Text="常用命令" FontWeight="Bold" Margin="0,0,0,8" />
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Height="Auto">
+                    <StackPanel x:Name="BtnPanel" />
+                </ScrollViewer>
+            </StackPanel>
+        </Grid>
 
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
@@ -25,7 +41,7 @@
                 <Grid>
                     <StackPanel x:Name="OutputPanel" />
                     <Button Click="BtnClear_Click" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Width="30" Height="30" Background="Transparent" BorderBrush="Transparent">
-                        <TextBlock Text="🗑️" FontFamily="Segoe UI Emoji" FontSize="16" Foreground="Gray" />
+                        <TextBlock Text="🗑️" FontFamily="Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei" FontSize="16" Foreground="Gray" />
                     </Button>
                 </Grid>
             </ScrollViewer>

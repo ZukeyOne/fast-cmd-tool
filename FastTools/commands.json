@@ -2,21 +2,21 @@
   {
     "alias": "root & remount",
     "steps": [
-      { "type": "command", "value": "adb root" },
+      { "type": "adb_command", "value": "adb -s {dev} root" },
       { "type": "delay", "value": "1000" },
-      { "type": "command", "value": "adb remount" }
+      { "type": "adb_command", "value": "adb -s {dev} remount" }
     ]
   },
   {
-    "alias": "测试连接",
+    "alias": "df -h",
     "steps": [
-      { "type": "command", "value": "ping 8.8.8.8 -n 4" }
+      { "type": "adb_command", "value": "adb -s {dev} shell df -h" }
     ]
   },
   {
-    "alias": "目录列表",
+    "alias": "ls /sdcard",
     "steps": [
-      { "type": "command", "value": "dir" }
+      { "type": "adb_command", "value": "adb -s {dev} shell ls /sdcard" }
     ]
   }
 ]

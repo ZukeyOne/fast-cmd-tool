@@ -18,6 +18,11 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
 3. **输出显示**：实时显示请求执行结果，每个请求独立可收缩面板
 4. **删除按钮**：右键菜单删除不需要的按钮
 5. **输出清除**：一键清除输出窗口
+6. **ADB设备检测**：实时检测并显示已连接的adb设备信息
+7. **ADB设备状态**：显示设备的rooted和remount状态
+8. **ADB设备选择**：支持单选设备，用于执行特定设备的ADB命令
+9. **ADB命令支持**：添加adb_command类型，支持{dev}占位符替换为选中设备ID
+10. **智能按钮控制**：包含adb_command的按钮在无设备时自动禁用
 
 ### 用户体验
 - 悬停显示完整命令（ToolTip）
@@ -94,7 +99,7 @@ class RequestItem
 
 class StepItem
 {
-    public string Type { get; set; } = string.Empty;  // "command" 或 "delay"
+    public string Type { get; set; } = string.Empty;  // "command", "delay", 或 "adb_command"
     public string Value { get; set; } = string.Empty; // 命令字符串 或 延时毫秒数
 }
 ```
@@ -109,8 +114,12 @@ class StepItem
 
 ### 布局说明
 - **左侧面板**：
-  - 常用命令标题
-  - 可滚动按钮列表
+  - **上部区域（占1/3高度）**：已连接设备显示
+    - 显示已连接设备标题
+    - 可滚动设备列表，显示设备ID和连接状态
+  - **下部区域（占2/3高度）**：常用命令按钮
+    - 常用命令标题
+    - 可滚动按钮列表
 
 - **右侧面板**：
   - 可滚动输出面板列表，每个请求一个可收缩 Expander
@@ -152,6 +161,21 @@ class StepItem
 - try-catch 包围命令执行
 - 异常信息显示在输出框
 - 保存配置失败时弹出 MessageBox
+
+### ADB设备检测实现
+- **USB事件触发检测**：使用 WMI (Windows Management Instrumentation) 监听USB设备变化事件，当设备插入或拔出时触发ADB设备检测
+  - 使用 `ManagementEventWatcher` 监听 `__InstanceCreationEvent` 和 `__InstanceDeletionEvent` 事件
+  - 事件过滤条件：`TargetInstance ISA 'Win32_USBHub'`
+  - 检测间隔：0.5秒
+- **1秒延迟机制**：USB设备变化后，使用 `System.Threading.Timer` 延迟1秒再执行ADB设备检查，避免频繁检查
+- **命令执行**：通过 `Process` 类执行 `adb devices` 命令
+- **结果解析**：解析命令输出获取设备列表和连接状态
+- **设备状态检查**：
+  - 新设备加入时自动检查root和remount状态
+  - 点击按钮执行命令前重新检查当前选中设备的状态
+- **UI更新**：使用 `Dispatcher.Invoke` 确保线程安全地更新设备列表显示
+- **设备显示**：无设备时显示"未检测到设备"提示，有设备时显示设备ID、连接状态和root/remount状态
+- **依赖**：使用 `System.Management` NuGet包实现WMI功能
 
 ## 部署指南
 
@@ -197,9 +221,5 @@ dotnet run --project FastTools
 ---
 
 **更新日志**：
-- 2025-12-28: 支持串行多任务，每个按钮可包含多个任务（命令或延时）；确保请求间串行执行；输出改为可收缩面板，默认收缩，显示执行状态；修复编译警告（null 引用检查）；移除即时运行自定义命令功能
-- 2025-12-28: UI 修改 - 清除输出按钮改为图标（删除图标），放置在输出面板右下角
-- 2025-12-28: 编码处理改进 - 命令输出从GBK编码转换为UTF-8再显示（通过设置CMD代码页为UTF-8）
-- 2025-12-28: UI 优化 - 根据管理员权限动态显示或隐藏管理员权限说明
-
-本文档基于当前代码实现编写，如有功能更新请及时同步。
+- 2025-12-28: 设备列表刷新机制优化 - 实现USB事件触发的ADB设备检测，设备变化后1秒自动检查；设备状态刷新规则改进，新设备加入或点击按钮时自动检查root/remount状态；移除定时检测机制，使用WMI监听USB事件提高效率
+- 2025-12-28: UI 重构与新功能 - 左侧面板分为上下两部分，上部显示ADB设备信息，下部显示命令按钮；添加ADB设备实时检测功能，每5秒更新一次设备列表；按钮面板高度调整为主界面的三分之二

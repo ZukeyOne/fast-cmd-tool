@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
@@ -26,9 +27,13 @@ namespace FastTools
 
         private Expander CreateRequestExpander(RequestItem request)
         {
+            var headerBlock = new TextBlock();
+            headerBlock.Inlines.Add(new Run("⏳ ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
+            headerBlock.Inlines.Add(new Run(request.Alias));
+            
             var expander = new Expander
             {
-                Header = $"{request.Alias} - 等待中",
+                Header = headerBlock,
                 IsExpanded = false
             };
             var textBox = new RichTextBox
@@ -50,6 +55,9 @@ namespace FastTools
             Loaded += MainWindow_Loaded;
         }
 
+        private ADBDeviceManager.DeviceInfo? _selectedDevice;
+        private readonly ADBDeviceManager _adbDeviceManager = new ADBDeviceManager();
+
         private async void MainWindow_Loaded(object? sender, RoutedEventArgs e)
         {
             await LoadRequestsAsync();
@@ -58,11 +66,112 @@ namespace FastTools
             // 检查管理员权限，如果是管理员则隐藏管理员权限说明
             bool isAdmin = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
             AdminNote.Visibility = isAdmin ? Visibility.Collapsed : Visibility.Visible;
+
+            // 注册设备更新事件
+            _adbDeviceManager.DevicesUpdated += OnDevicesUpdated;
+
+            // 初始化设备检测
+            await _adbDeviceManager.UpdateDeviceListAsync();
+            
+            // 初始化USB设备监听
+            _adbDeviceManager.InitializeUsbDeviceMonitoring();
+        }
+
+        // 设备更新事件处理
+        private void OnDevicesUpdated(object? sender, List<ADBDeviceManager.DeviceInfo> devices)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                UpdateDeviceUI(devices);
+            });
         }
 
         private void BtnClear_Click(object sender, RoutedEventArgs e)
         {
             OutputPanel.Children.Clear();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            // 释放ADB设备管理器资源
+            _adbDeviceManager.Dispose();
+        }
+
+
+
+        private void UpdateDeviceUI(List<ADBDeviceManager.DeviceInfo> devices)
+        {
+            DevicePanel.Children.Clear();
+            
+            if (devices.Count == 0)
+            {
+                var textBlock = new TextBlock
+                {
+                    Text = "未检测到设备",
+                    Foreground = Brushes.Gray,
+                    Margin = new Thickness(0, 0, 0, 4)
+                };
+                DevicePanel.Children.Add(textBlock);
+                _selectedDevice = null;
+                RefreshRequestButtons(); // 更新按钮状态
+                return;
+            }
+            
+            foreach (var device in devices)
+            {
+                var stackPanel = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Margin = new Thickness(0, 0, 0, 4),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                
+                var radioButton = new RadioButton
+                {
+                    Content = device.DeviceId,
+                    Foreground = Brushes.Green,
+                    GroupName = "Devices",
+                    Margin = new Thickness(0, 0, 8, 0),
+                    IsChecked = _selectedDevice?.DeviceId == device.DeviceId
+                };
+                
+                radioButton.Checked += (s, e) =>
+                {
+                    _selectedDevice = device;
+                    RefreshRequestButtons(); // 更新按钮状态
+                };
+                
+                stackPanel.Children.Add(radioButton);
+                
+                // 显示root状态
+                var rootIndicator = new TextBlock
+                {
+                    Text = device.IsRooted ? "[Rooted]" : "[Non-Rooted]",
+                    Foreground = device.IsRooted ? Brushes.Orange : Brushes.Gray,
+                    FontSize = 10,
+                    Margin = new Thickness(0, 0, 4, 0)
+                };
+                stackPanel.Children.Add(rootIndicator);
+                
+                // 显示remount状态
+                var remountIndicator = new TextBlock
+                {
+                    Text = device.IsRemounted ? "[Remounted]" : "[Non-Remounted]",
+                    Foreground = device.IsRemounted ? Brushes.Blue : Brushes.Gray,
+                    FontSize = 10
+                };
+                stackPanel.Children.Add(remountIndicator);
+                
+                DevicePanel.Children.Add(stackPanel);
+            }
+            
+            // 如果没有选中设备且有设备可用，则默认选择第一个设备
+            if (_selectedDevice == null || !devices.Any(d => d.DeviceId == _selectedDevice.DeviceId))
+            {
+                _selectedDevice = devices.FirstOrDefault();
+                RefreshRequestButtons(); // 更新按钮状态
+            }
         }
 
         [DllImport("kernel32.dll")]
@@ -85,7 +194,10 @@ namespace FastTools
         {
             var textBox = expander.Content as RichTextBox;
             if (textBox == null) return;
-            expander.Header = $"🔄 - {request.Alias}";
+            var headerBlock = new TextBlock();
+            headerBlock.Inlines.Add(new Run("🔄 ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
+            headerBlock.Inlines.Add(new Run(request.Alias));
+            expander.Header = headerBlock;
             Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"--- 开始执行任务: {request.Alias} ---"))));
             foreach (var step in request.Steps)
             {
@@ -93,6 +205,13 @@ namespace FastTools
                 {
                     Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"----- 命令:{step.Value} -----"))));
                     await ExecuteCommandAsync(step.Value, textBox);
+                }
+                else if (step.Type == "adb_command")
+                {
+                    // 替换{dev}占位符为选中的设备ID
+                    var command = step.Value.Replace("{dev}", _selectedDevice?.DeviceId ?? "");
+                    Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"----- ADB命令:{command} -----"))));
+                    await ExecuteCommandAsync(command, textBox);
                 }
                 else if (step.Type == "delay")
                 {
@@ -112,7 +231,10 @@ namespace FastTools
                 }
             }
             Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"--- 任务完成 ---"))));
-            expander.Header = $"✅ - {request.Alias}";
+            var completedHeaderBlock = new TextBlock();
+            completedHeaderBlock.Inlines.Add(new Run("✅ ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
+            completedHeaderBlock.Inlines.Add(new Run(request.Alias));
+            expander.Header = completedHeaderBlock;
         }
 
         private async Task ExecuteCommandAsync(string command, RichTextBox outputBox)
@@ -164,14 +286,33 @@ namespace FastTools
             foreach (var item in _requests)
             {
                 var b = new Button { Content = item.Alias, Margin = new Thickness(0,0,0,6), ToolTip = string.Join("; ", item.Steps.Select(s => $"{s.Type}: {s.Value}")) };
+                
+                // 检查请求是否包含adb_command步骤
+                bool hasAdbCommand = item.Steps.Any(step => step.Type == "adb_command");
+                
+                // 如果包含adb_command但没有选中设备，则禁用按钮
+                b.IsEnabled = !hasAdbCommand || (_selectedDevice != null);
+                
                 b.Click += async (s, e) =>
                 {
                     var expander = CreateRequestExpander(item);
                     OutputPanel.Children.Add(expander);
-                    expander.Header = $"⏳ - {item.Alias}";
+                    var headerBlock = new TextBlock();
+                    headerBlock.Inlines.Add(new Run("⏳ ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
+                    headerBlock.Inlines.Add(new Run(item.Alias));
+                    expander.Header = headerBlock;
                     await _executionSemaphore.WaitAsync();
                     try
                     {
+                        // 在执行请求前检查设备状态
+                        if (_selectedDevice != null)
+                        {
+                            // 重新检查当前选中设备的root和remount状态
+                            _selectedDevice.IsRooted = await _adbDeviceManager.CheckRootStatusAsync(_selectedDevice.DeviceId);
+                            _selectedDevice.IsRemounted = await _adbDeviceManager.CheckRemountStatusAsync(_selectedDevice.DeviceId);
+                            // 更新设备UI显示
+                            await _adbDeviceManager.UpdateDeviceListAsync();
+                        }
                         await ExecuteRequestAsync(item, expander);
                     }
                     finally
