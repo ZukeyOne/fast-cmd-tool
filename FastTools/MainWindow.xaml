@@ -15,40 +15,62 @@
             </Grid.RowDefinitions>
 
             <!-- ADB设备显示区域 -->
-            <StackPanel Grid.Row="0" Margin="0,0,0,10" VerticalAlignment="Top">
-                <TextBlock Text="已连接设备" FontWeight="Bold" Margin="0,0,0,8" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Height="Auto">
-                    <StackPanel x:Name="DevicePanel" />
-                </ScrollViewer>
-            </StackPanel>
+            <Border Grid.Row="0" VerticalAlignment="Stretch" BorderBrush="LightGray" BorderThickness="1" CornerRadius="15" Margin="0,0,0,10">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="已连接设备" FontWeight="Bold" Margin="0,0,0,8" />
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="DevicePanel" />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
 
             <!-- 按钮面板 -->
-            <StackPanel Grid.Row="1" Margin="0,0,0,0" VerticalAlignment="Top">
-                <TextBlock Text="常用命令" FontWeight="Bold" Margin="0,0,0,8" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Height="Auto">
-                    <StackPanel x:Name="BtnPanel" />
-                </ScrollViewer>
-            </StackPanel>
-        </Grid>
-
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="40" />
-            </Grid.RowDefinitions>
-
-            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
-                <Grid>
-                    <StackPanel x:Name="OutputPanel" />
-                    <Button Click="BtnClear_Click" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Width="30" Height="30" Background="Transparent" BorderBrush="Transparent">
-                        <TextBlock Text="🗑️" FontFamily="Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei" FontSize="16" Foreground="Gray" />
-                    </Button>
+            <Border Grid.Row="1" VerticalAlignment="Stretch" BorderBrush="LightGray" BorderThickness="1" CornerRadius="15">
+                <Grid Margin="10 5 0 5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="常用命令" FontWeight="Bold" Margin="0,0,0,8" />
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0 0 5 0">
+                        <StackPanel x:Name="BtnPanel" />
+                    </ScrollViewer>
                 </Grid>
-            </ScrollViewer>
-
-            <StackPanel Grid.Row="1" Orientation="Vertical" Margin="0,8,0,0">
-                <TextBlock x:Name="AdminNote" FontWeight="Bold" Text="若命令需要管理员权限，请以管理员方式运行本程序。" TextWrapping="Wrap" />
-            </StackPanel>
+            </Border>
         </Grid>
+
+        <!-- 输出面板 -->
+        <Border Grid.Column="1" BorderBrush="LightGray" BorderThickness="1" CornerRadius="5">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="40" />
+                </Grid.RowDefinitions>
+
+                <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <StackPanel x:Name="OutputPanel" />
+                        <Button Click="BtnClear_Click" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" Width="30" Height="30" Background="Transparent" BorderBrush="Transparent">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Content="{TemplateBinding Content}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                    <TextBlock Text="🗑️" FontFamily="Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei" FontSize="16" Foreground="Gray" />
+                </Button>
+                    </Grid>
+                </ScrollViewer>
+
+                <StackPanel Grid.Row="1" Orientation="Vertical" Margin="8,8,0,0">
+                    <TextBlock x:Name="AdminNote" FontWeight="Bold" Text="若命令需要管理员权限，请以管理员方式运行本程序。" TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

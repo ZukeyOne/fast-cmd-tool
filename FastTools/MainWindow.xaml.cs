@@ -40,10 +40,18 @@ namespace FastTools
             {
                 IsReadOnly = true,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                AcceptsReturn = true,
+                AcceptsReturn = false,
                 FontFamily = new FontFamily("Consolas, Microsoft YaHei"),
                 FontSize = 12
             };
+            // 设置默认段落样式，减小行间距
+            var paragraphStyle = new Style(typeof(Paragraph));
+            paragraphStyle.Setters.Add(new Setter(Paragraph.LineHeightProperty, 14.0)); // 设置行高
+            paragraphStyle.Setters.Add(new Setter(Paragraph.LineStackingStrategyProperty, LineStackingStrategy.BlockLineHeight));
+            paragraphStyle.Setters.Add(new Setter(Paragraph.MarginProperty, new Thickness(0, 0, 0, 0))); // 移除段落间距
+            textBox.Document.Resources.Add(typeof(Paragraph), paragraphStyle);
+            // 清除初始空段落
+            textBox.Document.Blocks.Clear();
             expander.Content = textBox;
             return expander;
         }
@@ -286,6 +294,23 @@ namespace FastTools
             foreach (var item in _requests)
             {
                 var b = new Button { Content = item.Alias, Margin = new Thickness(0,0,0,6), ToolTip = string.Join("; ", item.Steps.Select(s => $"{s.Type}: {s.Value}")) };
+                // 设置圆角样式
+                var template = new ControlTemplate(typeof(Button));
+                var borderFactory = new FrameworkElementFactory(typeof(Border));
+                borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+                borderFactory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+                borderFactory.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
+                borderFactory.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
+                borderFactory.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Button.PaddingProperty));
+                
+                var contentFactory = new FrameworkElementFactory(typeof(ContentPresenter));
+                contentFactory.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+                contentFactory.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+                contentFactory.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(Button.ContentProperty));
+                
+                borderFactory.AppendChild(contentFactory);
+                template.VisualTree = borderFactory;
+                b.Template = template;
                 
                 // 检查请求是否包含adb_command步骤
                 bool hasAdbCommand = item.Steps.Any(step => step.Type == "adb_command");
