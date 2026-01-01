@@ -11,6 +11,11 @@ dotnet build FastTools
 dotnet run --project FastTools
 ```
 
+编译Realse：
+```
+dotnet publish --configuration Release --self-contained true --runtime win-x64 -p:PublishSingleFile=true
+```
+
 Notes: The app reads and writes `commands.json` (copied to output). To persist added/removed buttons, run from the published/output folder or ensure `commands.json` is writable in the working directory. Each button represents a request with multiple steps (commands or delays).
 
 

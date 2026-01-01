@@ -24,6 +24,7 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
 9. **ADB命令支持**：添加adb_command类型，支持{dev}占位符替换为选中设备ID
 10. **智能按钮控制**：包含adb_command的按钮在无设备时自动禁用
 11. **本地目录选择**：adb_command支持LocalDir属性，当为true时弹出文件夹选择对话框，将{local_dir}占位符替换为用户选择的目录
+12. **工作目录配置**：adb_command支持WorkDir属性，可配置固定目录路径，将{work_dir}占位符替换为配置的目录
 
 ### 用户体验
 - 悬停显示完整命令（ToolTip）
@@ -67,31 +68,42 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
 - **编码处理**：使用 OEM 编码页处理中文输出
 
 ### 3. 配置文件 (commands.json)
-- **格式**：JSON 数组，每个对象包含 alias 和 steps 列表
+- **格式**：JSON 对象，包含 "work_dir" 和 "requests" 两个属性
+  - work_dir: 全局工作目录路径（可选）
+  - requests: 命令请求数组，每个对象包含 alias 和 steps 列表
 - **示例**：
 ```json
-[
-  {
-    "alias": "网络信息",
-    "steps": [
-      { "type": "command", "value": "ipconfig /all" }
-    ]
-  },
-  {
-    "alias": "示例多步骤请求",
-    "steps": [
-      { "type": "command", "value": "echo 开始" },
-      { "type": "delay", "value": "1000" },
-      { "type": "command", "value": "echo 结束" }
-    ]
-  },
-  {
-    "alias": "pull to local dir",
-    "steps": [
-      { "type": "adb_command", "value": "adb -s {dev} pull /sdcard/Download/12 {local_dir}", "LocalDir": true }
-    ]
-  }
-]
+{
+  "work_dir": "D:\\downloads",
+  "requests": [
+    {
+      "alias": "网络信息",
+      "steps": [
+        { "type": "command", "value": "ipconfig /all" }
+      ]
+    },
+    {
+      "alias": "示例多步骤请求",
+      "steps": [
+        { "type": "command", "value": "echo 开始" },
+        { "type": "delay", "value": "1000" },
+        { "type": "command", "value": "echo 结束" }
+      ]
+    },
+    {
+      "alias": "pull to local dir",
+      "steps": [
+        { "type": "adb_command", "value": "adb -s {dev} pull /sdcard/Download/12 {local_dev}", "LocalDir": true }
+      ]
+    },
+    {
+      "alias": "pull to work dir",
+      "steps": [
+        { "type": "adb_command", "value": "adb -s {dev} pull /sdcard/Download/test.txt {work_dir}" }
+      ]
+    }
+  ]
+}
 ```
 
 ## 数据模型
@@ -112,11 +124,21 @@ class StepItem
 }
 ```
 
+### MainWindow 类字段
+```csharp
+class MainWindow : Window
+{
+    private string _workDir = string.Empty;  // 全局工作目录路径
+    private List<RequestItem> _requests = new();
+    // ... 其他字段
+}
+```
+
 ### 数据流
-1. 应用启动 → 读取 commands.json → 反序列化为 List<RequestItem>
+1. 应用启动 → 读取 commands.json → 解析 JSON 对象获取 work_dir 和 requests
 2. 生成按钮 → 绑定点击事件
 3. 用户点击 → 串行执行步骤列表（命令或延时） → 显示输出（请求间串行执行）
-4. 添加/删除 → 更新 List → 保存到 JSON
+4. 添加/删除 → 更新 List → 保存到 JSON（包含 work_dir 和 requests）
 
 ## 用户界面设计
 
@@ -186,14 +208,27 @@ class StepItem
 - **依赖**：使用 `System.Management` NuGet包实现WMI功能
 
 ### 本地目录选择功能实现
-- **功能触发**：当adb_command步骤的LocalDir属性为true且命令包含{local_dir}占位符时触发
+- **功能触发**：当adb_command步骤的LocalDir属性为true且命令包含{local_dev}占位符时触发
 - **对话框显示**：使用Windows Forms的FolderBrowserDialog在UI线程上显示文件夹选择对话框
   - 通过`Dispatcher.Invoke()`确保在UI线程上创建和显示对话框
   - 对话框为模态对话框，会阻塞当前线程直到用户完成选择或取消
-- **占位符替换**：用户选择目录后，将{local_dir}占位符替换为选中的目录路径
+- **占位符替换**：用户选择目录后，将{local_dev}占位符替换为选中的目录路径
 - **取消处理**：用户取消选择时，跳过当前命令的执行，显示提示信息
 - **依赖**：项目需要启用Windows Forms支持（<UseWindowsForms>true</UseWindowsForms>）
 - **配置要求**：commands.json中使用"LocalDir"属性名（驼峰命名），与C#类属性名保持一致
+
+### 工作目录配置功能实现
+- **配置方式**：在 commands.json 的顶层添加 "work_dir" 属性，配置全局工作目录路径（可选）
+- **功能触发**：当 adb_command 命令包含 {work_dir} 占位符时触发
+- **占位符替换**：将 {work_dir} 占位符替换为全局 work_dir 配置的路径
+- **使用场景**：适用于需要固定工作目录的场景，避免每次执行时重复选择目录
+- **配置要求**：在 JSON 对象的顶层配置 "work_dir" 属性，所有命令共享同一个工作目录
+- **优先级**：{work_dir} 替换在 {local_dev} 之前执行，两者可以同时使用
+- **实现细节**：
+  - MainWindow 类维护 _workDir 字段存储全局工作目录
+  - LoadRequestsAsync 方法解析 JSON 对象的 work_dir 属性
+  - SaveRequestsAsync 方法将 work_dir 序列化到 JSON 对象的顶层
+  - ExecuteRequestAsync 方法使用全局 _workDir 替换命令中的 {work_dir} 占位符
 
 ## 部署指南
 
@@ -239,6 +274,8 @@ dotnet run --project FastTools
 ---
 
 **更新日志**：
-- 2026-01-01: 本地目录选择功能 - 为adb_command添加LocalDir属性支持，当值为true时弹出文件夹选择对话框，将{local_dir}占位符替换为用户选择的目录；修复对话框非阻塞问题，确保命令执行等待用户完成目录选择；在WPF项目中集成Windows Forms的FolderBrowserDialog控件
+- 2026-01-01: JSON结构重构 - 将WorkDir从步骤级配置改为全局配置；commands.json从数组结构改为对象结构，包含顶层"work_dir"属性和"requests"数组；所有命令共享同一个工作目录，简化配置管理
+- 2026-01-01: 工作目录配置功能 - 为adb_command添加WorkDir属性支持，可配置固定目录路径，将{work_dir}占位符替换为配置的目录；适用于需要固定工作目录的场景，避免每次执行时重复选择目录
+- 2025-12-31: 本地目录选择功能 - 为adb_command添加LocalDir属性支持，当值为true时弹出文件夹选择对话框，将{local_dev}占位符替换为用户选择的目录；修复对话框非阻塞问题，确保命令执行等待用户完成目录选择；在WPF项目中集成Windows Forms的FolderBrowserDialog控件
 - 2025-12-29: 设备列表刷新机制优化 - 实现USB事件触发的ADB设备检测，设备变化后1秒自动检查；设备状态刷新规则改进，新设备加入或点击按钮时自动检查root/remount状态；移除定时检测机制，使用WMI监听USB事件提高效率
 - 2025-12-28: UI 重构与新功能 - 左侧面板分为上下两部分，上部显示ADB设备信息，下部显示命令按钮；添加ADB设备实时检测功能，每5秒更新一次设备列表；按钮面板高度调整为主界面的三分之二

@@ -21,6 +21,7 @@ namespace FastTools
     {
         private readonly string _requestsFile;
         private List<RequestItem> _requests = new();
+        private string _workDir = string.Empty;
         private static readonly SemaphoreSlim _executionSemaphore = new SemaphoreSlim(1);
 
         private enum ExecutionStatus { Waiting, Executing, Completed }
@@ -219,8 +220,14 @@ namespace FastTools
                     // 替换{dev}占位符为选中的设备ID
                     var command = step.Value.Replace("{dev}", _selectedDevice?.DeviceId ?? "");
                     
+                    // 替换{work_dir}占位符为配置的工作目录
+                    if (!string.IsNullOrEmpty(_workDir) && command.Contains("{work_dir}"))
+                    {
+                        command = command.Replace("{work_dir}", _workDir);
+                    }
+                    
                     // 处理local_dir属性
-                    if (step.LocalDir == true && command.Contains("{local_dir}"))
+                    if (step.LocalDir == true && command.Contains("{local_dev}"))
                     {
                         string selectedDir = string.Empty;
                         bool dialogResult = false;
@@ -243,7 +250,7 @@ namespace FastTools
                         
                         if (dialogResult && !string.IsNullOrEmpty(selectedDir))
                         {
-                            command = command.Replace("{local_dir}", selectedDir);
+                            command = command.Replace("{local_dev}", selectedDir);
                         }
                         else
                         {
@@ -405,15 +412,31 @@ namespace FastTools
                 if (!File.Exists(_requestsFile))
                 {
                     _requests = new List<RequestItem>();
+                    _workDir = string.Empty;
                     return;
                 }
                 var txt = await File.ReadAllTextAsync(_requestsFile, Encoding.UTF8);
-                _requests = JsonSerializer.Deserialize<List<RequestItem>>(txt, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<RequestItem>();
+                var jsonDoc = JsonDocument.Parse(txt);
+                
+                if (jsonDoc.RootElement.TryGetProperty("work_dir", out var workDirElement))
+                {
+                    _workDir = workDirElement.GetString() ?? string.Empty;
+                }
+                
+                if (jsonDoc.RootElement.TryGetProperty("requests", out var requestsElement))
+                {
+                    _requests = JsonSerializer.Deserialize<List<RequestItem>>(requestsElement.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<RequestItem>();
+                }
+                else
+                {
+                    _requests = new List<RequestItem>();
+                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"加载配置文件失败: {ex.Message}");
                 _requests = new List<RequestItem>();
+                _workDir = string.Empty;
             }
         }
 
@@ -421,7 +444,13 @@ namespace FastTools
         {
             try
             {
-                var txt = JsonSerializer.Serialize(_requests, new JsonSerializerOptions { WriteIndented = true });
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                var json = new
+                {
+                    work_dir = _workDir,
+                    requests = _requests
+                };
+                var txt = JsonSerializer.Serialize(json, options);
                 await File.WriteAllTextAsync(_requestsFile, txt, Encoding.UTF8);
             }
             catch (Exception ex)
@@ -441,6 +470,7 @@ namespace FastTools
             public string Type { get; set; } = string.Empty;
             public string Value { get; set; } = string.Empty;
             public bool? LocalDir { get; set; } = false;
+            public string WorkDir { get; set; } = string.Empty;
         }
     }
 }
