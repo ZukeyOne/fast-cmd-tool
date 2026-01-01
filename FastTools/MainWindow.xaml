@@ -35,7 +35,19 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="常用命令" FontWeight="Bold" Margin="0,0,0,8" />
+                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <TextBlock Text="常用命令" FontWeight="Bold" />
+                        <Button Name="AddCommandButton" Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent" BorderBrush="Transparent" Padding="0" Click="AddCommandButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border CornerRadius="4" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Content="{TemplateBinding Content}" />
+                                    </Border>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <TextBlock Text="➕" FontFamily="Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei" FontSize="14" Foreground="Gray" />
+                        </Button>
+                    </Grid>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0 0 5 0">
                         <StackPanel x:Name="BtnPanel" />
                     </ScrollViewer>

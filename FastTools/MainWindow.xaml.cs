@@ -23,6 +23,7 @@ namespace FastTools
         private List<RequestItem> _requests = new();
         private string _workDir = string.Empty;
         private static readonly SemaphoreSlim _executionSemaphore = new SemaphoreSlim(1);
+        private readonly ConfigManager _configManager;
 
         private enum ExecutionStatus { Waiting, Executing, Completed }
 
@@ -60,7 +61,8 @@ namespace FastTools
         public MainWindow()
         {
             InitializeComponent();
-            _requestsFile = Path.Combine(AppContext.BaseDirectory, "commands.json");
+            _requestsFile = Path.Combine(AppContext.BaseDirectory, "config.json");
+            _configManager = new ConfigManager(_requestsFile);
             Loaded += MainWindow_Loaded;
         }
 
@@ -98,6 +100,22 @@ namespace FastTools
         private void BtnClear_Click(object sender, RoutedEventArgs e)
         {
             OutputPanel.Children.Clear();
+        }
+
+        private void AddCommandButton_Click(object sender, RoutedEventArgs e)
+        {
+            var addCommandWindow = new AddCommandWindow
+            {
+                Owner = this
+            };
+            addCommandWindow.ShowDialog();
+        }
+
+        public async System.Threading.Tasks.Task AddRequestAsync(RequestItem request)
+        {
+            await _configManager.AddRequestAsync(request);
+            _requests.Add(request);
+            RefreshRequestButtons();
         }
 
         protected override void OnClosed(EventArgs e)
@@ -227,7 +245,7 @@ namespace FastTools
                     }
                     
                     // 处理local_dir属性
-                    if (step.LocalDir == true && command.Contains("{local_dev}"))
+                    if (step.LocalDir == true && command.Contains("{local_dir}"))
                     {
                         string selectedDir = string.Empty;
                         bool dialogResult = false;
@@ -250,7 +268,7 @@ namespace FastTools
                         
                         if (dialogResult && !string.IsNullOrEmpty(selectedDir))
                         {
-                            command = command.Replace("{local_dev}", selectedDir);
+                            command = command.Replace("{local_dir}", selectedDir);
                         }
                         else
                         {
@@ -442,35 +460,12 @@ namespace FastTools
 
         private async Task SaveRequestsAsync()
         {
-            try
+            var config = new CommandsConfig
             {
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var json = new
-                {
-                    work_dir = _workDir,
-                    requests = _requests
-                };
-                var txt = JsonSerializer.Serialize(json, options);
-                await File.WriteAllTextAsync(_requestsFile, txt, Encoding.UTF8);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("保存配置失败: " + ex.Message);
-            }
-        }
-
-        private class RequestItem
-        {
-            public string Alias { get; set; } = string.Empty;
-            public List<StepItem> Steps { get; set; } = new();
-        }
-
-        private class StepItem
-        {
-            public string Type { get; set; } = string.Empty;
-            public string Value { get; set; } = string.Empty;
-            public bool? LocalDir { get; set; } = false;
-            public string WorkDir { get; set; } = string.Empty;
+                WorkDir = _workDir,
+                Requests = _requests
+            };
+            await _configManager.SaveConfigAsync(config);
         }
     }
 }
