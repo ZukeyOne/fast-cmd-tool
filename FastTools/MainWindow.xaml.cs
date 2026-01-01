@@ -206,18 +206,52 @@ namespace FastTools
             headerBlock.Inlines.Add(new Run("🔄 ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
             headerBlock.Inlines.Add(new Run(request.Alias));
             expander.Header = headerBlock;
-            Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"--- 开始执行任务: {request.Alias} ---"))));
+            Dispatcher.Invoke(() => ((System.Windows.Controls.RichTextBox)textBox).Document.Blocks.Add(new Paragraph(new Run($"--- 开始执行任务: {request.Alias} ---"))));
             foreach (var step in request.Steps)
             {
                 if (step.Type == "command")
                 {
-                    Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"----- 命令:{step.Value} -----"))));
+                    Dispatcher.Invoke(() => ((System.Windows.Controls.RichTextBox)textBox).Document.Blocks.Add(new Paragraph(new Run($"----- 命令:{step.Value} -----"))));
                     await ExecuteCommandAsync(step.Value, textBox);
                 }
                 else if (step.Type == "adb_command")
                 {
                     // 替换{dev}占位符为选中的设备ID
                     var command = step.Value.Replace("{dev}", _selectedDevice?.DeviceId ?? "");
+                    
+                    // 处理local_dir属性
+                    if (step.LocalDir == true && command.Contains("{local_dir}"))
+                    {
+                        string selectedDir = string.Empty;
+                        bool dialogResult = false;
+                        
+                        // 在UI线程上显示文件夹选择对话框
+                        Dispatcher.Invoke(() =>
+                        {
+                            var folderDialog = new System.Windows.Forms.FolderBrowserDialog
+                            {
+                                Description = "选择本地目录",
+                                ShowNewFolderButton = true
+                            };
+                            
+                            if (folderDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                            {
+                                selectedDir = folderDialog.SelectedPath;
+                                dialogResult = true;
+                            }
+                        });
+                        
+                        if (dialogResult && !string.IsNullOrEmpty(selectedDir))
+                        {
+                            command = command.Replace("{local_dir}", selectedDir);
+                        }
+                        else
+                        {
+                            Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run("----- 取消选择目录，命令执行取消 -----"))));
+                            continue;
+                        }
+                    }
+                    
                     Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"----- ADB命令:{command} -----"))));
                     await ExecuteCommandAsync(command, textBox);
                 }
@@ -225,27 +259,27 @@ namespace FastTools
                 {
                     if (int.TryParse(step.Value, out int delay))
                     {
-                        Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"----- 延时:{delay} ms -----"))));
+                        Dispatcher.Invoke(() => ((System.Windows.Controls.RichTextBox)textBox).Document.Blocks.Add(new Paragraph(new Run($"----- 延时:{delay} ms -----"))));
                         await Task.Delay(delay);
                     }
                     else
                     {
-                        Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"----- 无效延时值: {step.Value} -----"))));
+                        Dispatcher.Invoke(() => ((System.Windows.Controls.RichTextBox)textBox).Document.Blocks.Add(new Paragraph(new Run($"----- 无效延时值: {step.Value} -----"))));
                     }
                 }
                 else
                 {
-                    Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"未知步骤类型: {step.Type}"))));
+                    Dispatcher.Invoke(() => ((System.Windows.Controls.RichTextBox)textBox).Document.Blocks.Add(new Paragraph(new Run($"未知步骤类型: {step.Type}"))));
                 }
             }
-            Dispatcher.Invoke(() => textBox.Document.Blocks.Add(new Paragraph(new Run($"--- 任务完成 ---"))));
+            Dispatcher.Invoke(() => ((System.Windows.Controls.RichTextBox)textBox).Document.Blocks.Add(new Paragraph(new Run($"--- 任务完成 ---"))));
             var completedHeaderBlock = new TextBlock();
             completedHeaderBlock.Inlines.Add(new Run("✅ ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
             completedHeaderBlock.Inlines.Add(new Run(request.Alias));
             expander.Header = completedHeaderBlock;
         }
 
-        private async Task ExecuteCommandAsync(string command, RichTextBox outputBox)
+        private async Task ExecuteCommandAsync(string command, System.Windows.Controls.RichTextBox outputBox)
         {
             if (outputBox == null) return;
             try
@@ -406,6 +440,7 @@ namespace FastTools
         {
             public string Type { get; set; } = string.Empty;
             public string Value { get; set; } = string.Empty;
+            public bool? LocalDir { get; set; } = false;
         }
     }
 }

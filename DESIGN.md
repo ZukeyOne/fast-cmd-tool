@@ -23,6 +23,7 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
 8. **ADB设备选择**：支持单选设备，用于执行特定设备的ADB命令
 9. **ADB命令支持**：添加adb_command类型，支持{dev}占位符替换为选中设备ID
 10. **智能按钮控制**：包含adb_command的按钮在无设备时自动禁用
+11. **本地目录选择**：adb_command支持LocalDir属性，当为true时弹出文件夹选择对话框，将{local_dir}占位符替换为用户选择的目录
 
 ### 用户体验
 - 悬停显示完整命令（ToolTip）
@@ -83,6 +84,12 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
       { "type": "delay", "value": "1000" },
       { "type": "command", "value": "echo 结束" }
     ]
+  },
+  {
+    "alias": "pull to local dir",
+    "steps": [
+      { "type": "adb_command", "value": "adb -s {dev} pull /sdcard/Download/12 {local_dir}", "LocalDir": true }
+    ]
   }
 ]
 ```
@@ -101,6 +108,7 @@ class StepItem
 {
     public string Type { get; set; } = string.Empty;  // "command", "delay", 或 "adb_command"
     public string Value { get; set; } = string.Empty; // 命令字符串 或 延时毫秒数
+    public bool? LocalDir { get; set; } = false;      // 是否需要选择本地目录（仅adb_command有效）
 }
 ```
 
@@ -177,6 +185,16 @@ class StepItem
 - **设备显示**：无设备时显示"未检测到设备"提示，有设备时显示设备ID、连接状态和root/remount状态
 - **依赖**：使用 `System.Management` NuGet包实现WMI功能
 
+### 本地目录选择功能实现
+- **功能触发**：当adb_command步骤的LocalDir属性为true且命令包含{local_dir}占位符时触发
+- **对话框显示**：使用Windows Forms的FolderBrowserDialog在UI线程上显示文件夹选择对话框
+  - 通过`Dispatcher.Invoke()`确保在UI线程上创建和显示对话框
+  - 对话框为模态对话框，会阻塞当前线程直到用户完成选择或取消
+- **占位符替换**：用户选择目录后，将{local_dir}占位符替换为选中的目录路径
+- **取消处理**：用户取消选择时，跳过当前命令的执行，显示提示信息
+- **依赖**：项目需要启用Windows Forms支持（<UseWindowsForms>true</UseWindowsForms>）
+- **配置要求**：commands.json中使用"LocalDir"属性名（驼峰命名），与C#类属性名保持一致
+
 ## 部署指南
 
 ### 构建要求
@@ -221,5 +239,6 @@ dotnet run --project FastTools
 ---
 
 **更新日志**：
-- 2025-12-28: 设备列表刷新机制优化 - 实现USB事件触发的ADB设备检测，设备变化后1秒自动检查；设备状态刷新规则改进，新设备加入或点击按钮时自动检查root/remount状态；移除定时检测机制，使用WMI监听USB事件提高效率
+- 2026-01-01: 本地目录选择功能 - 为adb_command添加LocalDir属性支持，当值为true时弹出文件夹选择对话框，将{local_dir}占位符替换为用户选择的目录；修复对话框非阻塞问题，确保命令执行等待用户完成目录选择；在WPF项目中集成Windows Forms的FolderBrowserDialog控件
+- 2025-12-29: 设备列表刷新机制优化 - 实现USB事件触发的ADB设备检测，设备变化后1秒自动检查；设备状态刷新规则改进，新设备加入或点击按钮时自动检查root/remount状态；移除定时检测机制，使用WMI监听USB事件提高效率
 - 2025-12-28: UI 重构与新功能 - 左侧面板分为上下两部分，上部显示ADB设备信息，下部显示命令按钮；添加ADB设备实时检测功能，每5秒更新一次设备列表；按钮面板高度调整为主界面的三分之二

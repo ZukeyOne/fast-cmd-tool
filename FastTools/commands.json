@@ -86,5 +86,11 @@
     "steps": [
       { "type": "adb_command", "value": "adb -s {dev} pull /sdcard/7" }
     ]
+  },
+  {
+    "alias": "pull to local dir",
+    "steps": [
+      { "type": "adb_command", "value": "adb -s {dev} pull /sdcard/Download/12 {local_dir}", "LocalDir": true }
+    ]
   }
 ]
