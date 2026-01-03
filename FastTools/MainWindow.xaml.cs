@@ -21,6 +21,7 @@ namespace FastTools
     {
         private readonly string _requestsFile;
         private List<RequestItem> _requests = new();
+        private List<HistoryItem> _history = new();
         private string _workDir = string.Empty;
         private static readonly SemaphoreSlim _executionSemaphore = new SemaphoreSlim(1);
         private readonly ConfigManager _configManager;
@@ -72,7 +73,9 @@ namespace FastTools
         private async void MainWindow_Loaded(object? sender, RoutedEventArgs e)
         {
             await LoadRequestsAsync();
+            await LoadHistoryAsync();
             RefreshRequestButtons();
+            RefreshHistoryButtons();
 
             // 检查管理员权限，如果是管理员则隐藏管理员权限说明
             bool isAdmin = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
@@ -141,7 +144,8 @@ namespace FastTools
                 };
                 DevicePanel.Children.Add(textBlock);
                 _selectedDevice = null;
-                RefreshRequestButtons(); // 更新按钮状态
+                RefreshRequestButtons();
+                RefreshHistoryButtons();
                 return;
             }
             
@@ -166,7 +170,8 @@ namespace FastTools
                 radioButton.Checked += (s, e) =>
                 {
                     _selectedDevice = device;
-                    RefreshRequestButtons(); // 更新按钮状态
+                    RefreshRequestButtons();
+                    RefreshHistoryButtons();
                 };
                 
                 stackPanel.Children.Add(radioButton);
@@ -197,7 +202,8 @@ namespace FastTools
             if (_selectedDevice == null || !devices.Any(d => d.DeviceId == _selectedDevice.DeviceId))
             {
                 _selectedDevice = devices.FirstOrDefault();
-                RefreshRequestButtons(); // 更新按钮状态
+                RefreshRequestButtons();
+                RefreshHistoryButtons();
             }
         }
 
@@ -302,6 +308,21 @@ namespace FastTools
             completedHeaderBlock.Inlines.Add(new Run("✅ ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
             completedHeaderBlock.Inlines.Add(new Run(request.Alias));
             expander.Header = completedHeaderBlock;
+            
+            // 添加历史记录
+            var historyItem = new HistoryItem
+            {
+                Alias = request.Alias,
+                Steps = request.Steps,
+                ExecuteTime = DateTime.Now
+            };
+            await _configManager.AddHistoryAsync(historyItem);
+            _history.Insert(0, historyItem);
+            if (_history.Count > 50)
+            {
+                _history = _history.Take(50).ToList();
+            }
+            RefreshHistoryButtons();
         }
 
         private async Task ExecuteCommandAsync(string command, System.Windows.Controls.RichTextBox outputBox)
@@ -458,6 +479,19 @@ namespace FastTools
             }
         }
 
+        private async Task LoadHistoryAsync()
+        {
+            try
+            {
+                _history = await _configManager.LoadHistoryAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"加载历史记录失败: {ex.Message}");
+                _history = new List<HistoryItem>();
+            }
+        }
+
         private async Task SaveRequestsAsync()
         {
             var config = new CommandsConfig
@@ -466,6 +500,84 @@ namespace FastTools
                 Requests = _requests
             };
             await _configManager.SaveConfigAsync(config);
+        }
+
+        private void RefreshHistoryButtons()
+        {
+            HistoryPanel.Children.Clear();
+            foreach (var item in _history)
+            {
+                var b = new Button
+                {
+                    Content = $"{item.Alias} ({item.ExecuteTime:yyyy-MM-dd HH:mm:ss})",
+                    Margin = new Thickness(0, 0, 0, 6),
+                    ToolTip = string.Join("; ", item.Steps.Select(s => $"{s.Type}: {s.Value}"))
+                };
+                
+                var template = new ControlTemplate(typeof(Button));
+                var borderFactory = new FrameworkElementFactory(typeof(Border));
+                borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+                borderFactory.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+                borderFactory.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
+                borderFactory.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
+                borderFactory.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Button.PaddingProperty));
+                
+                var contentFactory = new FrameworkElementFactory(typeof(ContentPresenter));
+                contentFactory.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+                contentFactory.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+                contentFactory.SetValue(ContentPresenter.ContentProperty, new TemplateBindingExtension(Button.ContentProperty));
+                
+                borderFactory.AppendChild(contentFactory);
+                template.VisualTree = borderFactory;
+                b.Template = template;
+                
+                // 检查历史记录是否包含adb_command步骤
+                bool hasAdbCommand = item.Steps.Any(step => step.Type == "adb_command");
+                
+                // 如果包含adb_command但没有选中设备，则禁用按钮
+                b.IsEnabled = !hasAdbCommand || (_selectedDevice != null);
+                
+                b.Click += async (s, e) =>
+                {
+                    var expander = CreateRequestExpander(new RequestItem { Alias = item.Alias, Steps = item.Steps });
+                    OutputPanel.Children.Add(expander);
+                    var headerBlock = new TextBlock();
+                    headerBlock.Inlines.Add(new Run("⏳ ") { FontFamily = new FontFamily("Segoe UI Emoji, Segoe UI Symbol, Microsoft YaHei") });
+                    headerBlock.Inlines.Add(new Run(item.Alias));
+                    expander.Header = headerBlock;
+                    await _executionSemaphore.WaitAsync();
+                    try
+                    {
+                        if (_selectedDevice != null)
+                        {
+                            _selectedDevice.IsRooted = await _adbDeviceManager.CheckRootStatusAsync(_selectedDevice.DeviceId);
+                            _selectedDevice.IsRemounted = await _adbDeviceManager.CheckRemountStatusAsync(_selectedDevice.DeviceId);
+                            await _adbDeviceManager.UpdateDeviceListAsync();
+                        }
+                        await ExecuteRequestAsync(new RequestItem { Alias = item.Alias, Steps = item.Steps }, expander);
+                    }
+                    finally
+                    {
+                        _executionSemaphore.Release();
+                    }
+                };
+
+                var menu = new ContextMenu();
+                var mi = new MenuItem { Header = "删除" };
+                mi.Click += async (s, e) =>
+                {
+                    if (MessageBox.Show($"删除历史记录 '{item.Alias}' ?", "确认", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                    {
+                        _history.Remove(item);
+                        await _configManager.SaveHistoryAsync(_history);
+                        RefreshHistoryButtons();
+                    }
+                };
+                menu.Items.Add(mi);
+                b.ContextMenu = menu;
+
+                HistoryPanel.Children.Add(b);
+            }
         }
     }
 }

@@ -13,7 +13,7 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
 ## 功能特性
 
 ### 核心功能
-1. **动态按钮加载**：从 `commands.json` 文件加载请求按钮，支持多步骤
+1. **动态按钮加载**：从 `config.json` 文件加载请求按钮，支持多步骤
 2. **请求执行**：点击按钮串行执行步骤列表（命令或延时），请求间串行执行
 3. **输出显示**：实时显示请求执行结果，每个请求独立可收缩面板
 4. **删除按钮**：右键菜单删除不需要的按钮
@@ -26,6 +26,8 @@ FastTools 是一个简单的 Windows 桌面应用程序，使用 C# 和 WPF 框�
 11. **本地目录选择**：adb_command支持LocalDir属性，当为true时弹出文件夹选择对话框，将{local_dir}占位符替换为用户选择的目录
 12. **工作目录配置**：adb_command支持WorkDir属性，可配置固定目录路径，将{work_dir}占位符替换为配置的目录
 13. **新增命令功能**：通过独立界面添加新命令，支持按顺序添加多个任务步骤
+14. **历史执行记录**：自动记录已执行的命令到历史列表，包含{local_dir}输入值，最多保存50条记录
+15. **历史命令重执行**：点击历史记录按钮可重新执行之前的命令，支持右键删除历史记录
 
 ### 用户体验
 - 悬停显示完整命令（ToolTip）
@@ -123,6 +125,13 @@ class StepItem
     public string Value { get; set; } = string.Empty; // 命令字符串 或 延时毫秒数
     public bool? LocalDir { get; set; } = false;      // 是否需要选择本地目录（仅adb_command有效）
 }
+
+class HistoryItem
+{
+    public string Alias { get; set; } = string.Empty;
+    public List<StepItem> Steps { get; set; } = new();
+    public DateTime ExecuteTime { get; set; }
+}
 ```
 
 ### MainWindow 类字段
@@ -131,15 +140,16 @@ class MainWindow : Window
 {
     private string _workDir = string.Empty;  // 全局工作目录路径
     private List<RequestItem> _requests = new();
+    private List<HistoryItem> _history = new();
     // ... 其他字段
 }
 ```
 
 ### 数据流
-1. 应用启动 → 读取 config.json → 解析 JSON 对象获取 work_dir 和 requests
+1. 应用启动 → 读取 config.json → 解析 JSON 对象获取 work_dir、requests 和 history
 2. 生成按钮 → 绑定点击事件
-3. 用户点击 → 串行执行步骤列表（命令或延时） → 显示输出（请求间串行执行）
-4. 添加/删除 → 更新 List → 保存到 JSON（包含 work_dir 和 requests）
+3. 用户点击 → 串行执行步骤列表（命令或延时） → 显示输出（请求间串行执行）→ 自动添加到历史记录
+4. 添加/删除 → 更新 List → 保存到 JSON（包含 work_dir、requests 和 history）
 
 ## 用户界面设计
 
@@ -148,9 +158,12 @@ class MainWindow : Window
   - **上部区域（占1/3高度）**：已连接设备显示
     - 显示已连接设备标题
     - 可滚动设备列表，显示设备ID和连接状态
-  - **下部区域（占2/3高度）**：常用命令按钮
+  - **中部区域（占1/3高度）**：常用命令按钮
     - 常用命令标题
     - 可滚动按钮列表
+  - **下部区域（占1/3高度）**：历史执行记录
+    - 历史执行标题
+    - 可滚动历史记录按钮列表，显示命令别名和执行时间
 
 - **右侧面板**：
   - 可滚动输出面板列表，每个请求一个可收缩 Expander
@@ -219,7 +232,7 @@ class MainWindow : Window
 - **配置要求**：commands.json中使用"LocalDir"属性名（驼峰命名），与C#类属性名保持一致
 
 ### 工作目录配置功能实现
-- **配置方式**：在 commands.json 的顶层添加 "work_dir" 属性，配置全局工作目录路径（可选）
+- **配置方式**：在 config.json 的顶层添加 "work_dir" 属性，配置全局工作目录路径（可选）
 - **功能触发**：当 adb_command 命令包含 {work_dir} 占位符时触发
 - **占位符替换**：将 {work_dir} 占位符替换为全局 work_dir 配置的路径
 - **使用场景**：适用于需要固定工作目录的场景，避免每次执行时重复选择目录
@@ -230,6 +243,24 @@ class MainWindow : Window
   - LoadRequestsAsync 方法解析 JSON 对象的 work_dir 属性
   - SaveRequestsAsync 方法将 work_dir 序列化到 JSON 对象的顶层
   - ExecuteRequestAsync 方法使用全局 _workDir 替换命令中的 {work_dir} 占位符
+
+### 历史执行记录功能实现
+- **自动记录**：每次执行命令后自动记录到历史列表
+- **记录内容**：包含命令别名、步骤列表（包含{local_dir}的输入值）和执行时间
+- **存储限制**：最多保存50条历史记录，超过后自动删除最旧的记录
+- **存储位置**：历史记录保存在 config.json 的 "history" 数组中
+- **UI显示**：在左侧面板下部区域显示历史记录按钮，按钮内容格式为 "别名 (执行时间)"
+- **重执行功能**：点击历史记录按钮可重新执行之前的命令
+- **删除功能**：右键历史记录按钮可删除该条历史记录
+- **设备状态检查**：历史记录按钮在无设备时自动禁用（如果包含adb_command步骤）
+- **实现细节**：
+  - ConfigManager 类添加 HistoryItem 类定义
+  - CommandsConfig 类添加 History 属性
+  - MainWindow 类维护 _history 字段存储历史记录列表
+  - LoadHistoryAsync 方法从配置文件加载历史记录
+  - RefreshHistoryButtons 方法在历史面板中显示历史记录按钮
+  - ExecuteRequestAsync 方法在命令执行完成后自动添加历史记录
+  - 设备状态变化时自动更新历史记录按钮的启用状态
 
 ## 部署指南
 
@@ -275,6 +306,7 @@ dotnet run --project FastTools
 ---
 
 **更新日志**：
+- 2026-01-03: 历史执行记录功能 - 添加历史执行记录功能，自动记录已执行的命令到历史列表，包含{local_dir}输入值，最多保存50条记录；支持点击历史记录按钮重新执行之前的命令；支持右键删除历史记录；历史记录按钮在无设备时自动禁用（如果包含adb_command步骤）；左侧面板分为三个区域：上部显示设备信息，中部显示常用命令，下部显示历史执行记录
 - 2026-01-01: 新增命令功能 - 添加独立的新增命令窗口（AddCommandWindow），支持按顺序添加多个任务步骤；在常用命令面板右上角添加新增命令按钮（➕图标）；创建独立的ConfigManager类管理JSON配置的读写操作，将数据模型和配置管理从MainWindow中分离
 - 2026-01-01: JSON结构重构 - 将WorkDir从步骤级配置改为全局配置；commands.json从数组结构改为对象结构，包含顶层"work_dir"属性和"requests"数组；所有命令共享同一个工作目录，简化配置管理
 - 2026-01-01: 工作目录配置功能 - 为adb_command添加WorkDir属性支持，可配置固定目录路径，将{work_dir}占位符替换为配置的目录；适用于需要固定工作目录的场景，避免每次执行时重复选择目录

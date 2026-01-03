@@ -11,7 +11,8 @@
         <Grid Grid.Column="0" Margin="0,0,10,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="1*" />
-                <RowDefinition Height="2*" />
+                <RowDefinition Height="1*" />
+                <RowDefinition Height="1*" />
             </Grid.RowDefinitions>
 
             <!-- ADB设备显示区域 -->
@@ -29,7 +30,7 @@
             </Border>
 
             <!-- 按钮面板 -->
-            <Border Grid.Row="1" VerticalAlignment="Stretch" BorderBrush="LightGray" BorderThickness="1" CornerRadius="15">
+            <Border Grid.Row="1" VerticalAlignment="Stretch" BorderBrush="LightGray" BorderThickness="1" CornerRadius="15" Margin="0,0,0,10">
                 <Grid Margin="10 5 0 5">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -50,6 +51,20 @@
                     </Grid>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0 0 5 0">
                         <StackPanel x:Name="BtnPanel" />
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- 历史执行面板 -->
+            <Border Grid.Row="2" VerticalAlignment="Stretch" BorderBrush="LightGray" BorderThickness="1" CornerRadius="15">
+                <Grid Margin="10 5 0 5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="历史执行" FontWeight="Bold" Margin="0,0,0,8" />
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0 0 5 0">
+                        <StackPanel x:Name="HistoryPanel" />
                     </ScrollViewer>
                 </Grid>
             </Border>

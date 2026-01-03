@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -26,13 +27,23 @@ namespace FastTools
         public List<RequestItem> Requests { get; set; } = new();
     }
 
+    public class HistoryItem
+    {
+        public string Alias { get; set; } = string.Empty;
+        public List<StepItem> Steps { get; set; } = new();
+        public DateTime ExecuteTime { get; set; }
+    }
+
     public class ConfigManager
     {
         private readonly string _configFilePath;
+        private readonly string _historyFilePath;
 
         public ConfigManager(string configFilePath)
         {
             _configFilePath = configFilePath;
+            var directory = Path.GetDirectoryName(configFilePath);
+            _historyFilePath = Path.Combine(directory ?? "", "history.json");
         }
 
         public async Task<CommandsConfig> LoadConfigAsync()
@@ -99,6 +110,55 @@ namespace FastTools
             var config = await LoadConfigAsync();
             config.Requests.Remove(request);
             await SaveConfigAsync(config);
+        }
+
+        public async Task AddHistoryAsync(HistoryItem history)
+        {
+            var historyList = await LoadHistoryAsync();
+            historyList.Insert(0, history);
+            if (historyList.Count > 50)
+            {
+                historyList = historyList.Take(50).ToList();
+            }
+            await SaveHistoryAsync(historyList);
+        }
+
+        public async Task ClearHistoryAsync()
+        {
+            await SaveHistoryAsync(new List<HistoryItem>());
+        }
+
+        public async Task<List<HistoryItem>> LoadHistoryAsync()
+        {
+            try
+            {
+                if (!File.Exists(_historyFilePath))
+                {
+                    return new List<HistoryItem>();
+                }
+
+                var txt = await File.ReadAllTextAsync(_historyFilePath, Encoding.UTF8);
+                return JsonSerializer.Deserialize<List<HistoryItem>>(txt, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<HistoryItem>();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"加载历史记录文件失败: {ex.Message}");
+                return new List<HistoryItem>();
+            }
+        }
+
+        public async Task SaveHistoryAsync(List<HistoryItem> history)
+        {
+            try
+            {
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                var txt = JsonSerializer.Serialize(history, options);
+                await File.WriteAllTextAsync(_historyFilePath, txt, Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("保存历史记录失败: " + ex.Message);
+            }
         }
     }
 }
